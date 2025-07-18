@@ -1,33 +1,54 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:iot_hub_client/api/models/device.dart';
+import 'package:iot_hub_client/main.dart';
+import 'package:iot_hub_client/services/token_state.dart';
+import 'package:iot_hub_client/views/admin/device_register.dart';
 
-IHCToken? tokenState;
-
-class AdminDevices extends StatefulWidget {
-  const AdminDevices({super.key, required this.title});
+class DeviceList extends StatefulWidget {
+  const DeviceList({super.key, required this.title});
 
   final String title;
 
   @override
-  State<AdminDevices> createState() => _AdminDevicesState();
+  State<DeviceList> createState() => _AdminDevicesState();
 }
 
-class _AdminDevicesState extends State<AdminDevices> {
+class _AdminDevicesState extends State<DeviceList> with RouteAware {
+  List<Device> devices = [];
+  bool isLoading = true;
+
   @override
   void initState() {
     super.initState();
+    _getDevices();
   }
 
-  Future<List<Device>> _getDevices() async {
-    tokenState = IHC.auth(
-      server: "http://localhost:8005",
-      username: "username",
-      password: "password",
-    );
+  Future<void> _getDevices() async {
+    setState(() => isLoading = true);
 
-    return IHC.getDevices(token: tokenState!);
+    final token = TokenStore.token;
+
+    if (token == null) {
+      return setState(() => isLoading = false);
+    }
+
+    final loadedDevices = await IHC.getDevices(token: token);
+    setState(() {
+      devices = loadedDevices;
+      isLoading = false;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void didPopNext() {
+    _getDevices();
   }
 
   @override
@@ -38,31 +59,28 @@ class _AdminDevicesState extends State<AdminDevices> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            FutureBuilder(
-              future: _getDevices(),
-              builder:
-                  (BuildContext context, AsyncSnapshot<List<Device>> snapshot) {
-                    if (snapshot.hasData) {
-                      final items = snapshot.data!;
-
-                      return Expanded(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: 600),
-                          child: ListView.builder(
-                            itemCount: items.length,
-                            itemBuilder: (context, index) {
-                              return DeviceListItem(device: items[index]);
-                            },
-                          ),
-                        ),
-                      );
-                    }
-
-                    return const Text("No Data");
+            Expanded(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 600),
+                child: ListView.builder(
+                  itemCount: devices.length,
+                  itemBuilder: (context, index) {
+                    return DeviceListItem(device: devices[index]);
                   },
+                ),
+              ),
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.add),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => DeviceRegister()),
+          );
+        },
       ),
     );
   }
@@ -83,30 +101,30 @@ class _DeviceListItemState extends State<DeviceListItem> {
   @override
   void initState() {
     super.initState();
-    IHC.getDeviceState(token: tokenState!, deviceId: widget.device.id!).then((
-      deviceState,
-    ) {
-      setState(() {
-        isOn = deviceState!.powerState;
-        isReady = true;
-      });
-    });
+    IHC
+        .getDeviceState(token: TokenStore.token!, deviceId: widget.device.id)
+        .then((deviceState) {
+          setState(() {
+            isOn = deviceState == null ? false : deviceState.powerState;
+            isReady = true;
+          });
+        });
   }
 
   void _changeState() {
-    if (tokenState == null) {
+    if (TokenStore.token == null) {
       debugPrint("NO TOKEN");
       return;
     }
 
     if (isOn) {
-      IHC.setDeviceOff(token: tokenState!, deviceId: widget.device.id!);
+      IHC.setDeviceOff(token: TokenStore.token!, deviceId: widget.device.id);
       return setState(() {
         isOn = false;
       });
     }
     if (!isOn) {
-      IHC.setDeviceOn(token: tokenState!, deviceId: widget.device.id!);
+      IHC.setDeviceOn(token: TokenStore.token!, deviceId: widget.device.id);
       return setState(() {
         isOn = true;
       });
@@ -148,6 +166,7 @@ class _DeviceListItemState extends State<DeviceListItem> {
                 ],
               ),
             ),
+            // TODO: Different On Types on selected Type
             IconButton(
               icon: Icon(
                 isOn ? Icons.toggle_on : Icons.toggle_off,

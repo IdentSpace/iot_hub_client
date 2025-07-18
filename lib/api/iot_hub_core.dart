@@ -13,8 +13,14 @@ class IHCToken {
     createdAt = DateTime.now();
   }
 
-  bool isNotExpired() {
-    return true;
+  bool isExpired() {
+    if (expiredAt == null) return true;
+    return DateTime.now().isAfter(expiredAt!);
+  }
+
+  @override
+  String toString() {
+    return '$server, ${createdAt.toIso8601String()}';
   }
 }
 
@@ -29,10 +35,40 @@ class IHC {
     return IHCToken("TODOPLACEHOLDER", server);
   }
 
+  // TODO: loadDeviceDriverAndTypeList
   // TODO: authWithCard()
   // TODO: getIHCState()
-  // TODO: registerDevice()
   // TODO: updateDevice()
+
+  static Future<bool> registerDevice({
+    required IHCToken token,
+    required Device device,
+  }) async {
+    final String path = '${token.server}/api/device/register';
+
+    final response = await http.post(
+      Uri.parse(path),
+      headers: {
+        'Authorization': 'Bearer ${token.token}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'device_host': device.host,
+        'device_name': device.name,
+        'device_driver': device.driver,
+        'device_type': device.type,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+
+    debugPrint(response.statusCode.toString());
+    debugPrint(response.body.toString());
+
+    return false;
+  }
 
   static Future<List<Device>> getDevices({required IHCToken token}) async {
     final String path = '${token.server}/api/device/list';
@@ -70,10 +106,7 @@ class IHC {
     if (response.statusCode == 200) {
       final state = jsonDecode(response.body);
 
-      debugPrint(state['data']['device'].toString());
       final devicestate = DeviceState.fromJsonIHC(state['data']['device']);
-      debugPrint(devicestate.message);
-      debugPrint(devicestate.powerState.toString());
       return devicestate;
     }
 
