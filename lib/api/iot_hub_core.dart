@@ -13,9 +13,24 @@ class IHCToken {
     createdAt = DateTime.now();
   }
 
+  void setServer(String server) {
+    server = server;
+  }
+
   bool isExpired() {
-    if (expiredAt == null) return true;
-    return DateTime.now().isAfter(expiredAt!);
+    if (expiredAt == null) return false;
+    return !DateTime.now().isAfter(expiredAt!);
+  }
+
+  bool isValid() {
+    if (server.isNotEmpty && !isExpired()) {
+      return true;
+    }
+
+    debugPrint(toString());
+    debugPrint("Token ist not valid");
+
+    return false;
   }
 
   @override
@@ -24,15 +39,31 @@ class IHCToken {
   }
 }
 
-class IHCResponse {}
-
 class IHC {
-  static IHCToken auth({
+  static Future<IHCToken?> auth({
     required String server,
     required String username,
     required String password,
-  }) {
-    return IHCToken("TODOPLACEHOLDER", server);
+  }) async {
+    try {
+      final String path = '$server/auth/login';
+
+      final response = await http.post(
+        Uri.parse(path),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint(response.body.toString());
+        return IHCToken("TODOPLACEHOLDER", server);
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint(e.toString());
+      return null;
+    }
   }
 
   // TODO: loadDeviceDriverAndTypeList
@@ -44,6 +75,8 @@ class IHC {
     required IHCToken token,
     required Device device,
   }) async {
+    if (!token.isValid()) return false;
+
     final String path = '${token.server}/api/device/register';
 
     final response = await http.post(
@@ -71,6 +104,9 @@ class IHC {
   }
 
   static Future<List<Device>> getDevices({required IHCToken token}) async {
+    if (!token.isValid()) return [];
+    debugPrint(token.toString());
+
     final String path = '${token.server}/api/device/list';
     final response = await http.get(
       Uri.parse(path),
@@ -96,6 +132,15 @@ class IHC {
     required IHCToken token,
     required String deviceId,
   }) async {
+    if (!token.isValid()) {
+      return DeviceState(
+        state: 'NODATA',
+        message: "Invalid Token",
+        rawData: '',
+        powerState: false,
+      );
+    }
+
     final String path = '${token.server}/api/device/$deviceId/state';
 
     final response = await http.get(
@@ -124,7 +169,11 @@ class IHC {
       headers: {'Authorization': 'Bearer ${token.token}'},
     );
 
-    return true;
+    if (response.statusCode == 200) {
+      return true;
+    }
+
+    return false;
   }
 
   static Future<bool> setDeviceOff({
@@ -138,6 +187,10 @@ class IHC {
       headers: {'Authorization': 'Bearer ${token.token}'},
     );
 
-    return true;
+    if (response.statusCode == 200) {
+      return true;
+    }
+
+    return false;
   }
 }

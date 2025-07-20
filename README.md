@@ -13,3 +13,7 @@
 ## Tested On
 - Androind:
 - Windows 11
+
+
+## Development
+- dart run build_runner build
