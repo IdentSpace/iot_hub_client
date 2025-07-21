@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:iot_hub_client/api/models/device.dart';
 import 'package:iot_hub_client/services/token_state.dart';
+import 'package:iot_hub_client/views/admin/device_list.dart';
 
 class DeviceRegister extends StatefulWidget {
-  const DeviceRegister({super.key});
+  const DeviceRegister({super.key, this.device});
+
+  final Device? device;
 
   @override
   State<DeviceRegister> createState() => _DeviceRegisterState();
@@ -15,8 +18,8 @@ class _DeviceRegisterState extends State<DeviceRegister> {
 
   bool isLoading = false;
 
-  String _deviceName = '';
-  String _deviceHost = '';
+  String? _deviceName;
+  String? _deviceHost;
   String? _deviceType;
   String? _deviceDriver;
 
@@ -29,6 +32,20 @@ class _DeviceRegisterState extends State<DeviceRegister> {
   ];
 
   final List<String> _deviceDrivers = ['shelly_http', 'nfc', 'ids_locker'];
+
+  @override
+  void initState() {
+    super.initState();
+    setState(() {
+      if (widget.device != null) {
+        _deviceName = widget.device!.name;
+        _deviceHost = widget.device!.host;
+
+        // _deviceType = widget.device!.type;
+        // _deviceDriver = widget.device!.driver;
+      }
+    });
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
@@ -62,6 +79,35 @@ class _DeviceRegisterState extends State<DeviceRegister> {
     setState(() => isLoading = false);
   }
 
+  Future<void> _delete() async {
+    if (widget.device == null) {
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    final deleteState = await IHC.deleteDevice(
+      token: TokenStore.token!,
+      deviceId: widget.device!.id,
+    );
+
+    if (!mounted) return;
+
+    if (!deleteState) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error by deleting")));
+
+      setState(() => isLoading = false);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => DeviceList()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -78,6 +124,7 @@ class _DeviceRegisterState extends State<DeviceRegister> {
                   child: Column(
                     children: [
                       TextFormField(
+                        initialValue: _deviceName,
                         decoration: InputDecoration(labelText: "Device Name"),
                         onSaved: (value) => _deviceName = value ?? '',
                         validator: (value) {
@@ -91,6 +138,7 @@ class _DeviceRegisterState extends State<DeviceRegister> {
                       SizedBox(height: 20),
 
                       TextFormField(
+                        initialValue: _deviceHost,
                         decoration: InputDecoration(labelText: "Device Host"),
                         onSaved: (value) => _deviceHost = value ?? '',
                         validator: (value) {
@@ -135,15 +183,33 @@ class _DeviceRegisterState extends State<DeviceRegister> {
                       ),
                       SizedBox(height: 20),
 
-                      ElevatedButton(
-                        onPressed: isLoading ? null : _submit,
-                        child: isLoading
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(),
-                              )
-                            : Text("Save"),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: isLoading ? null : _delete,
+                            child: isLoading
+                                ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Text("Delete"),
+                          ),
+
+                          SizedBox(width: 10),
+
+                          ElevatedButton(
+                            onPressed: isLoading ? null : _submit,
+                            child: isLoading
+                                ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Text("Save"),
+                          ),
+                        ],
                       ),
                     ],
                   ),

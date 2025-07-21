@@ -16,13 +16,15 @@ class TokenStore {
 
   static Future<void> load() async {
     final AppDatabase db = AppDatabase.instance;
-    final token = await (db.select(db.tokens)).getSingleOrNull();
+    final tokenlist = await (db.select(db.tokens)).get();
 
-    debugPrint(token?.server ?? '');
-
-    if (token == null) {
+    if (tokenlist.isEmpty) {
       return;
     }
+
+    final token = tokenlist[0];
+
+    debugPrint(token.server);
 
     _token = IHCToken(token.token ?? '', token.server);
   }

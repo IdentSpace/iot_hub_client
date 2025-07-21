@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iot_hub_client/services/database.dart';
 import 'package:iot_hub_client/services/token_state.dart';
-import 'package:iot_hub_client/views/admin/device_list.dart';
-import 'package:iot_hub_client/views/login.dart';
-
-// TODO: DB for AppData
+import 'package:iot_hub_client/views/login_select_token.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -24,14 +21,12 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(TokenStore.asString());
-
     return MaterialApp(
       title: 'IoT Hub',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: !TokenStore.has() ? const Login() : const DeviceList(),
+      home: LoginSelectToken(),
       navigatorObservers: [routeObserver],
     );
   }

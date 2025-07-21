@@ -3,8 +3,9 @@ import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:iot_hub_client/api/models/device.dart';
 import 'package:iot_hub_client/main.dart';
 import 'package:iot_hub_client/services/token_state.dart';
-import 'package:iot_hub_client/views/admin/config_app.dart';
 import 'package:iot_hub_client/views/admin/device_register.dart';
+import 'package:iot_hub_client/views/config/config_overview.dart';
+import 'package:iot_hub_client/widgets/dialog_nfc.dart';
 
 class DeviceList extends StatefulWidget {
   const DeviceList({super.key});
@@ -60,7 +61,7 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ConfigApp()),
+                MaterialPageRoute(builder: (context) => ConfigOverview()),
               );
             },
             icon: Icon(Icons.settings),
@@ -145,51 +146,79 @@ class _DeviceListItemState extends State<DeviceListItem> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: isReady
-            ? MainAxisAlignment.start
-            : MainAxisAlignment.center,
-        children: [
-          if (!isReady)
-            const Center(
-              child: SizedBox(
-                height: 32,
-                width: 32,
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else ...[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.device.name ?? 'unknow'),
-                  Text(widget.device.host ?? 'unknow'),
-                ],
-              ),
-            ),
-            // TODO: Different On Types on selected Type
-            IconButton(
-              icon: Icon(
-                isOn ? Icons.toggle_on : Icons.toggle_off,
-                size: 32,
-                color: isOn ? Colors.green : Colors.grey,
-              ),
-              onPressed: _changeState,
+    return GestureDetector(
+      onTap: () => {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DeviceRegister(device: widget.device),
+          ),
+        ),
+      },
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
             ),
           ],
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: isReady
+              ? MainAxisAlignment.start
+              : MainAxisAlignment.center,
+          children: [
+            if (!isReady)
+              const Center(
+                child: SizedBox(
+                  height: 32,
+                  width: 32,
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else ...[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.device.name ?? 'unknow'),
+                    Text(widget.device.host ?? 'unknow'),
+                  ],
+                ),
+              ),
+              shortAction(context: context, driver: widget.device.driver),
+            ],
+          ],
+        ),
       ),
     );
+  }
+
+  Widget shortAction({required BuildContext context, String? driver}) {
+    debugPrint(driver);
+    switch (driver) {
+      case 'shelly_http':
+        return IconButton(
+          icon: Icon(
+            isOn ? Icons.toggle_on : Icons.toggle_off,
+            size: 32,
+            color: isOn ? Colors.green : Colors.grey,
+          ),
+          onPressed: _changeState,
+        );
+      case 'nfc':
+        return IconButton(
+          onPressed: () => showNfcDialog(context),
+          icon: Icon(Icons.nfc),
+        );
+      default:
+        return Container();
+    }
   }
 }

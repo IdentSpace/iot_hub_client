@@ -32,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> insertToken(IHCToken token) async {
-    into(tokens).insert(
+    into(tokens).insertOnConflictUpdate(
       TokensCompanion.insert(
         createdAt: DateTime.now().millisecondsSinceEpoch,
         server: token.server,

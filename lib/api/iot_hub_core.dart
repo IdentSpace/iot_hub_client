@@ -151,7 +151,9 @@ class IHC {
     if (response.statusCode == 200) {
       final state = jsonDecode(response.body);
 
-      final devicestate = DeviceState.fromJsonIHC(state['data']['device']);
+      final DeviceState devicestate = DeviceState.fromJsonIHC(
+        state['data']['device'],
+      );
       return devicestate;
     }
 
@@ -192,5 +194,34 @@ class IHC {
     }
 
     return false;
+  }
+
+  static Future<bool> deleteDevice({
+    required IHCToken token,
+    required String deviceId,
+  }) async {
+    final String path = '${token.server}/api/device/$deviceId/delete';
+
+    final response = await http.get(
+      Uri.parse(path),
+      headers: {'Authorization': 'Bearer ${token.token}'},
+    );
+
+    debugPrint(response.body.toString());
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static Future<String?> readNFC({bool demo = false}) async {
+    if (demo) {
+      await Future.delayed(Duration(seconds: 5));
+      return "F42317";
+    }
+
+    return null;
   }
 }

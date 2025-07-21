@@ -21,7 +21,9 @@ class DeviceState {
       state: json['state'] as String?,
       message: json['message'] as String?,
       rawData: json['raw_data'],
-      powerState: json['power_state'] as bool,
+      powerState: json['power_state'] == null
+          ? false
+          : json['power_state'] as bool,
     );
   }
 }
