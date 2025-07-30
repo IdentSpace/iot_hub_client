@@ -14,6 +14,17 @@ class TokenStore {
     _token = null;
   }
 
+  static Future<void> logout() async {
+    final AppDatabase db = AppDatabase.instance;
+
+    if (_token != null) {
+      await (db.delete(
+        db.tokens,
+      )..where((filter) => filter.token.equals(_token!.token))).go();
+      clear();
+    }
+  }
+
   static Future<void> load() async {
     final AppDatabase db = AppDatabase.instance;
     final tokenlist = await (db.select(db.tokens)).get();

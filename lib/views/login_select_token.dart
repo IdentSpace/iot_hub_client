@@ -3,58 +3,101 @@ import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:iot_hub_client/services/database.dart';
 import 'package:iot_hub_client/services/token_state.dart';
 import 'package:iot_hub_client/views/admin/device_list.dart';
+import 'package:iot_hub_client/views/login.dart';
 
-class LoginSelectToken extends StatelessWidget {
-  const LoginSelectToken({super.key});
+class LoginSelectToken extends StatefulWidget {
+  LoginSelectToken({super.key});
+
+  final AppDatabase db = AppDatabase.instance;
+
+  @override
+  State<LoginSelectToken> createState() => _LoginSelectTokenState();
+}
+
+class _LoginSelectTokenState extends State<LoginSelectToken> {
+  late Future<List<Widget>> _futureList;
+  bool _navigated = false;
+
+  Future<List<Widget>> _getTokens() async {
+    final List<Widget> tmpList = [];
+
+    final List<Token> tokens = await (widget.db.select(widget.db.tokens)).get();
+    debugPrint(tokens.length.toString());
+
+    for (var t in tokens) {
+      tmpList.add(
+        userCard(
+          t,
+          () => {
+            TokenStore.setToken(IHCToken(t.name ?? '', t.server)),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => DeviceList()),
+            ),
+          },
+        ),
+      );
+    }
+
+    return tmpList;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _futureList = _getTokens();
+  }
 
   @override
   Widget build(BuildContext context) {
-    AppDatabase db = AppDatabase.instance;
-
-    Future<List> getTokens() async {
-      final List<Token> tokens = await (db.select(db.tokens)).get();
-
-      final List<Widget> list = [];
-
-      for (var t in tokens) {
-        list.add(
-          userCard(
-            t,
-            () => {
-              TokenStore.setToken(IHCToken(t.name ?? '', t.server)),
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => DeviceList()),
-              ),
-            },
-          ),
-        );
-      }
-
-      return list;
-    }
-
     return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text("Select User", style: TextStyle(fontSize: 20)),
+            Text("Select Account", style: TextStyle(fontSize: 20)),
             SizedBox(height: 20),
 
             FutureBuilder(
-              future: getTokens(),
+              future: _futureList,
               builder: (BuildContext context, AsyncSnapshot snap) {
                 if (snap.hasData) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [...snap.data],
+                  final list = snap.data;
+
+                  if (list.isEmpty && !_navigated) {
+                    _navigated = true;
+
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => Login()),
+                      );
+                    });
+
+                    return Container();
+                  }
+
+                  return Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [...list],
                   );
                 }
 
                 return CircularProgressIndicator();
               },
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => Login()),
+                  );
+                }),
+              },
+              child: Text("Add Account"),
             ),
           ],
         ),
@@ -82,9 +125,34 @@ class LoginSelectToken extends StatelessWidget {
           ],
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.center,
-          children: [Text(token.name ?? "NO NAME"), Text(token.server)],
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async => {
+                    await widget.db.deleteToken(token.token ?? ''),
+                    setState(() {
+                      _getTokens();
+                    }),
+                  },
+                  label: Text("Logout"),
+                ),
+              ],
+            ),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [Text(token.name ?? "NO NAME"), Text(token.server)],
+              ),
+            ),
+          ],
         ),
       ),
     );

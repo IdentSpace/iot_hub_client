@@ -54,9 +54,11 @@ class IHC {
         body: jsonEncode({'username': username, 'password': password}),
       );
 
+      debugPrint(response.statusCode.toString());
+
       if (response.statusCode == 200) {
-        debugPrint(response.body.toString());
-        return IHCToken("TODOPLACEHOLDER", server);
+        final data = jsonDecode(response.body);
+        return IHCToken(data["data"]["access_token"], server);
       }
 
       return null;

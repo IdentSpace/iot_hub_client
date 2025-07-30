@@ -16,6 +16,7 @@ class _LoginState extends State<Login> {
   final _formKey = GlobalKey<FormState>();
 
   bool isLoading = false;
+  String _errorText = '';
 
   String _serverHost = '';
   String _username = '';
@@ -26,7 +27,10 @@ class _LoginState extends State<Login> {
       return;
     }
 
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      _errorText = '';
+    });
 
     _formKey.currentState!.save();
 
@@ -39,6 +43,9 @@ class _LoginState extends State<Login> {
     setState(() => isLoading = false);
 
     if (token == null) {
+      setState(() {
+        _errorText = "Login failure, wrong data";
+      });
       return;
     }
 
@@ -119,7 +126,12 @@ class _LoginState extends State<Login> {
                           return null;
                         },
                       ),
-                      SizedBox(height: 40),
+                      SizedBox(height: 20),
+                      Text(
+                        _errorText,
+                        style: TextStyle(color: Colors.red, fontSize: 18),
+                      ),
+                      SizedBox(height: 20),
 
                       ElevatedButton(
                         onPressed: isLoading ? null : _login,
