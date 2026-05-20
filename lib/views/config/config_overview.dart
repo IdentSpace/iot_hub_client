@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:iot_hub_client/views/admin/config_app.dart';
+import 'package:iot_hub_client/views/config/config_account.dart';
+import 'package:iot_hub_client/views/config/config_hub.dart';
+import 'package:iot_hub_client/views/config/test_ioh.dart';
+import 'package:iot_hub_client/views/io_view.dart';
 import 'package:iot_hub_client/views/login.dart';
+import 'package:iot_hub_client/views/login_select_token.dart';
+import 'package:iot_hub_client/widgets/io_card.dart';
 
 class ConfigItem {
   final String name;
@@ -12,7 +18,19 @@ class ConfigItem {
 class ConfigOverview extends StatelessWidget {
   const ConfigOverview({super.key});
 
-  void _navigate(BuildContext context, Function call) {
+  void _navigate(
+    BuildContext context,
+    Function call, {
+    bool removeUntil = false,
+  }) {
+    if (removeUntil) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => call()),
+        (route) => false,
+      );
+      return;
+    }
     Navigator.push(context, MaterialPageRoute(builder: (context) => call()));
   }
 
@@ -26,7 +44,15 @@ class ConfigOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     List<ConfigItem> menuItems = [
-      ConfigItem(name: "Account", callback: () => _notImplemented(context)),
+      ConfigItem(
+        name: "Switch Account",
+        callback: () =>
+            _navigate(context, () => LoginSelectToken(), removeUntil: true),
+      ),
+      ConfigItem(
+        name: "Account",
+        callback: () => _navigate(context, () => ConfigAccount()),
+      ),
       ConfigItem(
         name: "Logout",
         callback: () => _navigate(context, () => Login()),
@@ -37,30 +63,28 @@ class ConfigOverview extends StatelessWidget {
       ),
       ConfigItem(
         name: "Hub Configuration",
-        callback: () => _notImplemented(context),
+        callback: () => _navigate(context, () => ConfigHub()),
+      ),
+      ConfigItem(
+        name: "Test",
+        callback: () => _navigate(context, () => TestIOH()),
       ),
       ConfigItem(name: "About", callback: () => _notImplemented(context)),
       ConfigItem(name: "Licenses", callback: () => _notImplemented(context)),
     ];
 
-    return Scaffold(
-      appBar: AppBar(title: const Text("Settings")),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 600),
-          child: Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: menuItems.length,
-                  itemBuilder: (context, index) {
-                    return configItem(menuItems[index]);
-                  },
-                ),
-              ),
-            ],
+    return IOHView(
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: menuItems.length,
+              itemBuilder: (context, index) {
+                return configItem(menuItems[index]);
+              },
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -68,21 +92,8 @@ class ConfigOverview extends StatelessWidget {
   Widget configItem(ConfigItem item) {
     return GestureDetector(
       onTap: () => item.callback(),
-      child: Container(
+      child: IOCard(
         margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 4,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-
         child: Row(children: [Text(item.name)]),
       ),
     );

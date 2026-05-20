@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:io_hub_sdk_dart/io_hub_sdk_dart.dart';
 import 'package:iot_hub_client/api/iot_hub_core.dart';
-import 'package:iot_hub_client/api/models/device.dart';
 import 'package:iot_hub_client/main.dart';
 import 'package:iot_hub_client/services/token_state.dart';
-import 'package:iot_hub_client/views/admin/device_register.dart';
+import 'package:iot_hub_client/views/admin/device_register_update.dart';
 import 'package:iot_hub_client/views/config/config_overview.dart';
 import 'package:iot_hub_client/widgets/dialog_nfc.dart';
+import 'package:iot_hub_client/widgets/io_action.dart';
+import 'package:iot_hub_client/widgets/io_card.dart';
 
 class DeviceList extends StatefulWidget {
   const DeviceList({super.key});
@@ -15,7 +17,7 @@ class DeviceList extends StatefulWidget {
 }
 
 class _AdminDevicesState extends State<DeviceList> with RouteAware {
-  List<Device> devices = [];
+  List<IOHDevice> devices = [];
   bool isLoading = true;
 
   @override
@@ -33,11 +35,23 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
       return setState(() => isLoading = false);
     }
 
-    final loadedDevices = await IHC.getDevices(token: token);
+    final loadedDevices = await IOHubClient(
+      token.server,
+      token.token,
+    ).deviceList();
     setState(() {
       devices = loadedDevices;
       isLoading = false;
     });
+  }
+
+  Future<void> _restartThreads() async {
+    final token = TokenStore.token;
+    if (token == null) {
+      return;
+    }
+
+    await IHC(token).restartThreads();
   }
 
   @override
@@ -54,8 +68,10 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text("Device list"),
+        backgroundColor: Colors.white,
         actions: [
           IconButton(
             onPressed: () {
@@ -83,6 +99,10 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
                 ),
               ),
             ),
+            ElevatedButton(
+              onPressed: _restartThreads,
+              child: Text("Restart threads"),
+            ),
           ],
         ),
       ),
@@ -91,7 +111,7 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => DeviceRegister()),
+            MaterialPageRoute(builder: (context) => DeviceRegisterUpdate()),
           );
         },
       ),
@@ -100,7 +120,7 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
 }
 
 class DeviceListItem extends StatefulWidget {
-  final Device device;
+  final IOHDevice device;
   const DeviceListItem({super.key, required this.device});
 
   @override
@@ -151,24 +171,12 @@ class _DeviceListItemState extends State<DeviceListItem> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => DeviceRegister(device: widget.device),
+            builder: (context) => DeviceRegisterUpdate(device: widget.device),
           ),
         ),
       },
-      child: Container(
+      child: IOCard(
         margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 4,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
         child: Row(
           mainAxisAlignment: isReady
               ? MainAxisAlignment.start
@@ -192,7 +200,7 @@ class _DeviceListItemState extends State<DeviceListItem> {
                   ],
                 ),
               ),
-              shortAction(context: context, driver: widget.device.driver),
+              IOAction(typeSlug: widget.device.typeSlug ?? ''),
             ],
           ],
         ),
@@ -201,7 +209,7 @@ class _DeviceListItemState extends State<DeviceListItem> {
   }
 
   Widget shortAction({required BuildContext context, String? driver}) {
-    debugPrint(driver);
+    debugPrint('Driver: $driver');
     switch (driver) {
       case 'shelly_http':
         return IconButton(

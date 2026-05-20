@@ -23,7 +23,7 @@ class _AdminDevicesState extends State<AdminDevices> {
     if (token == null) {
       return [];
     }
-    return IHC.getDevices(token: token);
+    return IHC(token).getDevices();
   }
 
   @override

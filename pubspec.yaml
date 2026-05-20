@@ -1,7 +1,7 @@
 name: iot_hub_client
-description: "A new Flutter project."
+description: "Client for IO Hub service"
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 0.1.0+1
+version: 0.3.0+1
 
 environment:
   sdk: ^3.8.1
@@ -15,6 +15,8 @@ dependencies:
   drift_flutter: ^0.2.4
   path_provider: ^2.1.5
   path: ^1.9.1
+  io_hub_sdk_dart:
+    path: ../io_hub_sdk_dart
 
 dev_dependencies:
   flutter_test:

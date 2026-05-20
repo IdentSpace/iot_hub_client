@@ -56,15 +56,18 @@ class _LoginState extends State<Login> {
 
     if (!mounted) return;
 
-    Navigator.push(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => DeviceList()),
+      (route) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(backgroundColor: Colors.white),
       body: Center(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
