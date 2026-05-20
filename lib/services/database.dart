@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:path_provider/path_provider.dart';

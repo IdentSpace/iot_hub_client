@@ -1,4 +1,5 @@
 import 'package:iot_hub_client/api/iot_hub_core.dart';
+import 'package:iot_hub_client/utils/helpers.dart';
 
 class DeviceState {
   final String? state;
@@ -31,15 +32,21 @@ class DeviceState {
 class Device {
   final String id;
   final String? host;
-  final String? driver;
-  final String? type;
+  final int? baudrate;
+  final int? channel;
+  final int? driverId;
+  final String? driverName;
+  final int? type;
   final String? name;
   DeviceState? state;
 
   Device({
     required this.id,
     required this.host,
-    required this.driver,
+    required this.driverId,
+    this.baudrate,
+    this.channel,
+    this.driverName,
     required this.type,
     required this.name,
     required this.state,
@@ -53,8 +60,11 @@ class Device {
     return Device(
       id: json['id'] as String,
       host: json['device_host'] as String?,
-      driver: json['device_driver'] as String?,
-      type: json['device_type'] as String?,
+      baudrate: Parser.asInt(json['baudrate']),
+      channel: Parser.asInt(json['channel']) ?? 0,
+      driverId: Parser.asInt(json['device_driver']),
+      driverName: json['device_driver_name'] as String?,
+      type: Parser.asInt(json['device_type']),
       name: json['name'] as String?,
       state: null,
     );
