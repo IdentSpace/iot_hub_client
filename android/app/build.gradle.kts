@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "eu.identspace.iot_hub_client"
+    namespace = "eu.identspace.iohubdash"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "29.0.13599879"
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "eu.identspace.iot_hub_client"
+        applicationId = "eu.identspace.iohubdash"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

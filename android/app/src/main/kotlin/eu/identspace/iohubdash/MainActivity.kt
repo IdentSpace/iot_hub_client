@@ -1,4 +1,4 @@
-package eu.identspace.iot_hub_client
+package eu.identspace.iohubdash
 
 import io.flutter.embedding.android.FlutterActivity
 

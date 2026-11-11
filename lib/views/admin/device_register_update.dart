@@ -5,8 +5,8 @@ import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:iot_hub_client/api/models/device.dart';
 import 'package:iot_hub_client/services/token_state.dart';
 import 'package:iot_hub_client/views/admin/device_list.dart';
-import 'package:iot_hub_client/views/io_view.dart';
 import 'package:iot_hub_client/widgets/io_card.dart';
+import 'package:iot_hub_client/widgets/device_control.dart';
 import 'package:iot_hub_client/widgets/io_material.dart';
 
 class DeviceRegisterUpdate extends StatefulWidget {
@@ -25,8 +25,6 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
   int? _selectedDriver;
   int? _selectedType;
 
-  String stateText = "Unknown";
-
   bool isUpdate = false;
 
   bool isLoading = false;
@@ -34,58 +32,50 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
 
   String? _deviceName;
   String? _deviceHost;
+  static const _standardBaudrates = <int>[
+    300,
+    600,
+    1200,
+    2400,
+    4800,
+    9600,
+    14400,
+    19200,
+    28800,
+    38400,
+    57600,
+    115200,
+    230400,
+    460800,
+    921600,
+  ];
   int? _deviceBaudrate;
+
+  List<int> get _baudrateOptions => <int>{
+    ..._standardBaudrates,
+    if (_deviceBaudrate != null) _deviceBaudrate!,
+  }.toList()..sort();
   int _deviceChannel = 0;
+  bool _uuidWithHyphens = false;
 
-  Future<void> _deviceEvent(String cmd, String? arg) async {
-    if (widget.device == null) {
-      return;
-    }
+  bool get _hasUuid => RegExp(
+    r'^[0-9a-fA-F]{32}$',
+  ).hasMatch((widget.device?.id ?? '').replaceAll('-', ''));
 
-    final token = TokenStore.token;
-    if (token == null) {
-      return;
-    }
-
-    await IOHubClient(
-      token.server,
-      token.token,
-    ).getDeviceEvent(widget.device!, cmd, arg);
-  }
-
-  Future<void> _getDeviceState() async {
-    debugPrint("Getting device state for device ${widget.device?.id}");
-    if (widget.device == null) {
-      debugPrint("No device specified for getting state");
-      return;
-    }
-    final token = TokenStore.token;
-    if (token == null) {
-      debugPrint("No token available for getting device state");
-      return;
-    }
-
-    final IOHDeviceState? deviceState = await IOHubClient(
-      token.server,
-      token.token,
-    ).getDeviceState(widget.device!);
-
-    if (deviceState == null) {
-      debugPrint("Failed to get device state");
-      setState(() {
-        stateText = "Error getting state";
-      });
-      return;
-    }
-
-    setState(() {
-      stateText = deviceState.toString();
-    });
+  String get _displayUuid {
+    final id = widget.device?.id ?? 'New Device';
+    if (!_hasUuid) return id;
+    final compact = id.replaceAll('-', '');
+    if (!_uuidWithHyphens) return compact;
+    return '${compact.substring(0, 8)}-${compact.substring(8, 12)}-'
+        '${compact.substring(12, 16)}-${compact.substring(16, 20)}-'
+        '${compact.substring(20)}';
   }
 
   Future<void> _loadDriversAndTypes() async {
     final drivers = await ihc.deviceDriverList();
     final types = await ihc.deviceTypeList();
+    if (!mounted) return;
     setState(() {
       _driverList = drivers;
       _typeList = types;
@@ -185,6 +175,7 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
       await _register();
     }
 
+    if (!mounted) return;
     setState(() => isLoading = false);
   }
 
@@ -227,220 +218,245 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
 
   @override
   Widget build(BuildContext context) {
-    return IOHView(
-      title: "Regsiter new device",
-      body: Column(
-        children: [
-          if (widget.device != null) ...[
-            IOCard(
-              title: 'Controll',
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Text("Bewegen:"),
-                      SizedBox(width: 40),
-                      ElevatedButton(
-                        onPressed: () => _deviceEvent("open", null),
-                        child: Text('Hochfahren'),
-                      ),
-                      SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: () => _deviceEvent("close", null),
-                        child: Text('Runterfahren'),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Text("Status:"),
-                      SizedBox(width: 40),
-                      ElevatedButton(
-                        onPressed: _getDeviceState,
-                        child: Text('Get Status'),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  Text(stateText),
-                ],
-              ),
+    return Scaffold(
+      appBar: AppBar(title: Text(isUpdate ? 'Edit device' : 'Add device')),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
-            SizedBox(height: 20),
-          ],
-          IOCard(
-            title: 'Settings',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Form(
-                  key: _formKey,
-                  child: Column(
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OverflowBar(
+                    alignment: MainAxisAlignment.spaceBetween,
+                    overflowAlignment: OverflowBarAlignment.end,
+                    spacing: 16,
+                    overflowSpacing: 12,
                     children: [
-                      SizedBox(height: 20),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.copy,
-                              size: 16,
-                              color: Colors.blueGrey,
-                            ),
-                            onPressed: () => _copy(
-                              widget.device?.id ?? 'New Device',
-                              'Device ID',
-                            ),
+                      if (isUpdate)
+                        TextButton.icon(
+                          onPressed: isLoading ? null : _delete,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.error,
                           ),
-                          Text(widget.device?.id ?? 'New Device'),
-                        ],
-                      ),
-
-                      SizedBox(height: 20),
-                      formFieldContainer(
-                        label: "Device Name",
-                        formField: TextFormField(
-                          initialValue: _deviceName,
-                          decoration: ioInputDecoration(),
-                          onSaved: (value) => _deviceName = value ?? '',
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Device name is required';
-                            }
-                            return null;
-                          },
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Delete'),
                         ),
-                      ),
-
-                      SizedBox(height: 20),
-
-                      formFieldContainer(
-                        label: "Host",
-                        formField: TextFormField(
-                          initialValue: _deviceHost,
-                          decoration: ioInputDecoration(),
-                          onSaved: (value) => _deviceHost = value ?? '',
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Device host ist required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-
-                      SizedBox(height: 20),
-
-                      formFieldContainer(
-                        label: "Driver",
-                        formField: DropdownButtonFormField<int>(
-                          decoration: ioInputDecoration(),
-                          initialValue: _selectedDriver,
-                          items: _driverList.map((driver) {
-                            return DropdownMenuItem<int>(
-                              value: driver['id'],
-                              child: Text(driver['name'] ?? 'Unknown'),
-                            );
-                          }).toList(),
-                          onChanged: (value) =>
-                              setState(() => _selectedDriver = value),
-                          // validator: (value) => value == null ? 'Select' : null,
-                          onSaved: (value) => _selectedDriver = value,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      formFieldContainer(
-                        label: "Type",
-                        formField: DropdownButtonFormField<int>(
-                          decoration: ioInputDecoration(),
-                          initialValue: _selectedType,
-                          items: _typeList.map((type) {
-                            debugPrint(type.toString());
-                            return DropdownMenuItem<int>(
-                              value: type['id'],
-                              child: Text(type['name'] ?? 'Unknown'),
-                            );
-                          }).toList(),
-                          onChanged: (value) =>
-                              setState(() => _selectedType = value),
-                          // validator: (value) => value == null ? 'Select' : null,
-                          onSaved: (value) => _selectedType = value,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      formFieldContainer(
-                        label: "Baudrate",
-                        formField: TextFormField(
-                          initialValue: _deviceBaudrate == null
-                              ? ''
-                              : _deviceBaudrate.toString(),
-                          keyboardType: TextInputType.number,
-                          decoration: ioInputDecoration(),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          onSaved: (value) => _deviceBaudrate = value != null
-                              ? int.tryParse(value)
-                              : null,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      formFieldContainer(
-                        label: "Channel",
-                        formField: TextFormField(
-                          initialValue: _deviceChannel.toString(),
-                          keyboardType: TextInputType.number,
-                          decoration: ioInputDecoration(),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          onSaved: (value) => _deviceChannel = value != null
-                              ? int.tryParse(value) ?? 0
-                              : 0,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton(
-                            onPressed: isLoading || !isUpdate ? null : _delete,
-                            child: isLoading
-                                ? SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : Text("Delete"),
-                          ),
-
-                          SizedBox(width: 10),
-
-                          ElevatedButton(
-                            onPressed: isLoading ? null : _submit,
-                            child: isLoading
-                                ? SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : Text("Save"),
-                          ),
-                        ],
+                      FilledButton.icon(
+                        onPressed: isLoading ? null : _submit,
+                        icon: isLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: const Text('Save'),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ],
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: Column(
+                children: [
+                  if (widget.device != null) ...[
+                    DeviceControl(device: widget.device!, enabled: !isLoading),
+                    SizedBox(height: 20),
+                  ],
+                  IOCard(
+                    title: 'Settings',
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                              SizedBox(height: 20),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.copy,
+                                      size: 16,
+                                      color: Colors.blueGrey,
+                                    ),
+                                    tooltip: 'Copy UUID',
+                                    onPressed: _hasUuid
+                                        ? () => _copy(_displayUuid, 'Device ID')
+                                        : null,
+                                  ),
+                                  Expanded(child: Text(_displayUuid)),
+                                  if (_hasUuid)
+                                    IconButton(
+                                      tooltip: _uuidWithHyphens
+                                          ? 'Show without hyphens'
+                                          : 'Show with hyphens',
+                                      isSelected: _uuidWithHyphens,
+                                      onPressed: () => setState(
+                                        () => _uuidWithHyphens =
+                                            !_uuidWithHyphens,
+                                      ),
+                                      icon: const Icon(Icons.compare_arrows),
+                                    ),
+                                ],
+                              ),
+
+                              SizedBox(height: 20),
+                              formFieldContainer(
+                                label: "Device Name",
+                                formField: TextFormField(
+                                  initialValue: _deviceName,
+                                  decoration: ioInputDecoration(),
+                                  onSaved: (value) => _deviceName = value ?? '',
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Device name is required';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+
+                              SizedBox(height: 20),
+
+                              formFieldContainer(
+                                label: "Host",
+                                formField: TextFormField(
+                                  initialValue: _deviceHost,
+                                  decoration: ioInputDecoration(),
+                                  onSaved: (value) => _deviceHost = value ?? '',
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Device host ist required';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+
+                              SizedBox(height: 20),
+
+                              formFieldContainer(
+                                label: "Driver",
+                                formField: DropdownButtonFormField<int>(
+                                  decoration: ioInputDecoration(),
+                                  initialValue: _selectedDriver,
+                                  items: _driverList.map((driver) {
+                                    return DropdownMenuItem<int>(
+                                      value: driver['id'],
+                                      child: Text(driver['name'] ?? 'Unknown'),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) =>
+                                      setState(() => _selectedDriver = value),
+                                  // validator: (value) => value == null ? 'Select' : null,
+                                  onSaved: (value) => _selectedDriver = value,
+                                ),
+                              ),
+                              SizedBox(height: 20),
+
+                              formFieldContainer(
+                                label: "Type",
+                                formField: DropdownButtonFormField<int>(
+                                  decoration: ioInputDecoration(),
+                                  initialValue: _selectedType,
+                                  items: _typeList.map((type) {
+                                    debugPrint(type.toString());
+                                    return DropdownMenuItem<int>(
+                                      value: type['id'],
+                                      child: Text(type['name'] ?? 'Unknown'),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) =>
+                                      setState(() => _selectedType = value),
+                                  // validator: (value) => value == null ? 'Select' : null,
+                                  onSaved: (value) => _selectedType = value,
+                                ),
+                              ),
+                              SizedBox(height: 20),
+
+                              formFieldContainer(
+                                label: "Baudrate",
+                                formField: DropdownButtonFormField<int>(
+                                  initialValue: _deviceBaudrate,
+                                  decoration: ioInputDecoration(),
+                                  hint: const Text('Select baudrate'),
+                                  isExpanded: true,
+                                  items: _baudrateOptions
+                                      .map(
+                                        (rate) => DropdownMenuItem<int>(
+                                          value: rate,
+                                          child: Text('$rate'),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: isLoading
+                                      ? null
+                                      : (value) => setState(
+                                          () => _deviceBaudrate = value,
+                                        ),
+                                  onSaved: (value) => _deviceBaudrate = value,
+                                ),
+                              ),
+                              SizedBox(height: 20),
+
+                              formFieldContainer(
+                                label: "Channel",
+                                formField: TextFormField(
+                                  initialValue: _deviceChannel.toString(),
+                                  keyboardType: TextInputType.number,
+                                  decoration: ioInputDecoration(),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  onSaved: (value) =>
+                                      _deviceChannel = value != null
+                                      ? int.tryParse(value) ?? 0
+                                      : 0,
+                                ),
+                              ),
+                              SizedBox(height: 20),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

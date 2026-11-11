@@ -85,8 +85,16 @@ class _HubCardState extends State<HubCard> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(widget.token.name ?? "IOHub"),
-                    Text(widget.token.server),
+                    Text(
+                      widget.token.name ?? "IOHub",
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      widget.token.server,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     SizedBox(height: 10),
                     StreamBuilder<IOHState?>(
                       stream: _hubStream,

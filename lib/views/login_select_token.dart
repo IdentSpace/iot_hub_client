@@ -3,7 +3,6 @@ import 'package:iot_hub_client/api/iot_hub_core.dart';
 import 'package:iot_hub_client/services/database.dart';
 import 'package:iot_hub_client/services/token_state.dart';
 import 'package:iot_hub_client/views/admin/device_list.dart';
-import 'package:iot_hub_client/views/io_view.dart';
 import 'package:iot_hub_client/views/login.dart';
 import 'package:iot_hub_client/widgets/hub_card.dart';
 
@@ -58,56 +57,86 @@ class _LoginSelectTokenState extends State<LoginSelectToken> {
 
   @override
   Widget build(BuildContext context) {
-    return IOHView(
-      maxWidth: 1000,
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text("Select Account", style: TextStyle(fontSize: 20)),
-          SizedBox(height: 20),
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1000),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        Text(
+                          'Select Account',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        FilledButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const Login(),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add Account'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
-          FutureBuilder(
-            future: _futureList,
-            builder: (BuildContext context, AsyncSnapshot snap) {
-              if (snap.hasData) {
-                final list = snap.data;
+                  FutureBuilder(
+                    future: _futureList,
+                    builder: (BuildContext context, AsyncSnapshot snap) {
+                      if (snap.hasError) {
+                        return const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Accounts could not be loaded. Please try again.',
+                          ),
+                        );
+                      }
+                      if (snap.hasData) {
+                        final list = snap.data;
 
-                if (list.isEmpty && !_navigated) {
-                  _navigated = true;
+                        if (list.isEmpty && !_navigated) {
+                          _navigated = true;
 
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => Login()),
-                    );
-                  });
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => Login()),
+                            );
+                          });
 
-                  return Container();
-                }
+                          return Container();
+                        }
 
-                return Wrap(
-                  alignment: WrapAlignment.center,
-                  children: [...list],
-                );
-              }
+                        return Wrap(
+                          alignment: WrapAlignment.center,
+                          children: [...list],
+                        );
+                      }
 
-              return CircularProgressIndicator();
-            },
+                      return CircularProgressIndicator();
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-          SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => Login()),
-                );
-              }),
-            },
-            child: Text("Add Account"),
-          ),
-        ],
+        ),
       ),
     );
   }
