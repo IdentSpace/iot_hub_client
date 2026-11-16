@@ -15,20 +15,13 @@ void main() {
       final service = DeviceActions(
         IHCToken('test', 'http://localhost:8006'),
         client: MockClient((request) async {
-          expect(request.url.path, '/api/device/state');
-          expect(request.url.queryParameters['uuid'], 'device-1');
+          expect(request.url.path, '/api/v2/devices/device-1/state');
           expect(request.headers['Authorization'], 'Bearer test');
           return http.Response(
             jsonEncode({
-              'type': 'IHCApiResponse',
-              'data': {
-                'device': {
-                  'state': 'error',
-                  'message': 'ERROR COMMUNICATING',
-                  'power_state': null,
-                },
-              },
-              'errors': {},
+              'connection': 'error',
+              'message': 'ERROR COMMUNICATING',
+              'values': {},
             }),
             200,
           );
@@ -45,17 +38,11 @@ void main() {
     final service = DeviceActions(
       IHCToken('test', 'http://localhost:8006'),
       client: MockClient((request) async {
-        expect(request.url.queryParameters, {
-          'uuid': 'device-1',
-          'cmd': 'switch',
-          'arg': 'on',
-        });
+        expect(request.url.path, '/api/v2/devices/device-1/commands');
+        expect(request.method, 'POST');
+        expect(jsonDecode(request.body), {'cmd': 'switch', 'arg': 'on'});
         return http.Response(
-          jsonEncode({
-            'type': 'IHCApiResponse',
-            'data': {},
-            'errors': {'device': 'offline'},
-          }),
+          jsonEncode({'success': false, 'message': 'offline'}),
           200,
         );
       }),

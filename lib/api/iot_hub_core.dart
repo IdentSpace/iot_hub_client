@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:iot_hub_client/api/models/device.dart';
+import 'package:iot_hub_client/api/models/hardware.dart';
 
 class IHCToken {
   final String server;
@@ -40,22 +41,35 @@ class IHCToken {
   }
 }
 
+class IHCRequestException implements Exception {
+  final String message;
+  const IHCRequestException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class IHC {
   final IHCToken token;
+  final http.Client? _client;
 
-  IHC(this.token);
+  IHC(this.token, {http.Client? client}) : _client = client;
 
   /// Generic GET request to IHC server
-  Future<http.Response> requestGET(String path) async {
-    final String pathFull = '${token.server}/api/$path';
+  Future<http.Response> requestGET(
+    String path, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final base = token.server.replaceFirst(RegExp(r'/+$'), '');
+    final String pathFull = '$base/api/$path';
 
-    final http.Response response = await http.get(
+    final http.Response response = await (_client?.get ?? http.get)(
       Uri.parse(pathFull),
       headers: {
         'Authorization': 'Bearer ${token.token}',
         'Accept': 'application/json',
       },
-    );
+    ).timeout(timeout);
 
     if (response.statusCode != 200) {
       debugPrint('Request failed with status: ${response.statusCode}.');
@@ -71,7 +85,7 @@ class IHC {
   ) async {
     final String pathFull = '${token.server}/api/$path';
 
-    final http.Response response = await http.post(
+    final http.Response response = await (_client?.post ?? http.post)(
       Uri.parse(pathFull),
       headers: {
         'Authorization': 'Bearer ${token.token}',
@@ -79,13 +93,40 @@ class IHC {
         'Content-Type': 'application/json',
       },
       body: jsonEncode(body),
-    );
+    ).timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
       debugPrint('Request failed with status: ${response.statusCode}.');
     }
 
     return response;
+  }
+
+  /// Discover hardware attached to the IOHub server on demand.
+  Future<HardwareDevices> hardwareDevices({required bool cameras}) async {
+    // Camera discovery probes up to five devices for three seconds each.
+    final response = await requestGET(
+      cameras ? 'v2/hardware/cameras?max_index=4' : 'v2/hardware/serial',
+      timeout: Duration(seconds: cameras ? 30 : 15),
+    );
+    if (response.statusCode != 200) {
+      throw IHCRequestException(
+        response.statusCode == 404
+            ? 'Hardware discovery is not supported by this IOHub server.'
+            : 'Could not find hardware (HTTP ${response.statusCode}). Try again or enter the host manually.',
+      );
+    }
+    try {
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || body['items'] is! List) {
+        throw const FormatException('Invalid hardware list');
+      }
+      return HardwareDevices.fromJson(body);
+    } catch (_) {
+      throw const IHCRequestException(
+        'The server returned an invalid hardware list. Enter the host manually.',
+      );
+    }
   }
 
   /// Get list of available device drivers from IHC server
@@ -106,7 +147,9 @@ class IHC {
 
   /// Register a new device on the IHC server
   Future<bool> registerDevice({required Device device}) async {
-    if (!token.isValid()) return false;
+    if (!token.isValid()) {
+      throw const IHCRequestException('No valid account selected');
+    }
 
     final response = await requestPOST('device/register/device', {
       'device_host': device.host,
@@ -115,15 +158,15 @@ class IHC {
       'device_type': device.type,
     });
 
-    if (response.statusCode == 200) {
-      return true;
-    }
-    return false;
+    _checkDeviceWrite(response);
+    return true;
   }
 
   /// Update device on the IHC server
   Future<bool> updateDevice({required Device device}) async {
-    if (!token.isValid()) return false;
+    if (!token.isValid()) {
+      throw const IHCRequestException('No valid account selected');
+    }
 
     final response = await requestPOST('device/update', {
       'id': device.id,
@@ -135,10 +178,50 @@ class IHC {
       'device_type': device.type,
     });
 
-    if (response.statusCode == 200) {
-      return true;
+    _checkDeviceWrite(response);
+    return true;
+  }
+
+  void _checkDeviceWrite(http.Response response) {
+    final fallback = 'Could not save device (HTTP ${response.statusCode})';
+    dynamic body;
+    try {
+      body = jsonDecode(response.body);
+    } on FormatException {
+      throw IHCRequestException(fallback);
     }
-    return false;
+    if (body is! Map<String, dynamic>) throw IHCRequestException(fallback);
+    final errors = body['errors'];
+    if (errors is Map && errors.isNotEmpty) {
+      throw IHCRequestException(errors.values.join('; '));
+    }
+    final detail = body['detail'];
+    if (detail is List && detail.isNotEmpty) {
+      throw IHCRequestException(
+        detail
+            .map((item) {
+              if (item is! Map) return item.toString();
+              final location = item['loc'];
+              final field = location is List && location.isNotEmpty
+                  ? '${location.last}: '
+                  : '';
+              return '$field${item['msg'] ?? 'Invalid value'}';
+            })
+            .join('; '),
+      );
+    }
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        body['type'] != 'IHCApiResponse' ||
+        body['message'] != 'success' ||
+        (errors != null && errors is! Map)) {
+      final message = detail is String
+          ? detail
+          : detail is Map
+          ? detail['message'] as String?
+          : null;
+      throw IHCRequestException(message ?? fallback);
+    }
   }
 
   /// Delete device on the IHC server

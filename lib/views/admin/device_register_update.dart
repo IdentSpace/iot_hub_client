@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:io_hub_sdk_dart/io_hub_sdk_dart.dart';
@@ -8,9 +11,11 @@ import 'package:iot_hub_client/views/admin/device_list.dart';
 import 'package:iot_hub_client/widgets/io_card.dart';
 import 'package:iot_hub_client/widgets/device_control.dart';
 import 'package:iot_hub_client/widgets/io_material.dart';
+import 'package:iot_hub_client/widgets/hardware_host_picker.dart';
 
 class DeviceRegisterUpdate extends StatefulWidget {
-  const DeviceRegisterUpdate({super.key, this.device});
+  const DeviceRegisterUpdate({super.key, this.device, this.api});
+  final IHC? api;
   final IOHDevice? device;
 
   @override
@@ -19,6 +24,7 @@ class DeviceRegisterUpdate extends StatefulWidget {
 
 class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
   final _formKey = GlobalKey<FormState>();
+  final _hostController = TextEditingController();
 
   List<Map<String, dynamic>> _driverList = [];
   List<Map<String, dynamic>> _typeList = [];
@@ -28,7 +34,9 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
   bool isUpdate = false;
 
   bool isLoading = false;
-  IHC ihc = IHC(TokenStore.token!);
+  late final IHC ihc = widget.api ?? IHC(TokenStore.token!);
+  String? _saveError;
+  String? _optionsError;
 
   String? _deviceName;
   String? _deviceHost;
@@ -73,18 +81,26 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
   }
 
   Future<void> _loadDriversAndTypes() async {
-    final drivers = await ihc.deviceDriverList();
-    final types = await ihc.deviceTypeList();
-    if (!mounted) return;
-    setState(() {
-      _driverList = drivers;
-      _typeList = types;
-
-      if (widget.device != null) {
-        _selectedType = widget.device!.typeId;
-        _selectedDriver = widget.device!.driverId;
+    try {
+      final drivers = await ihc.deviceDriverList();
+      final types = await ihc.deviceTypeList();
+      if (!mounted) return;
+      setState(() {
+        _driverList = drivers;
+        _typeList = types;
+        _optionsError = null;
+        if (widget.device != null) {
+          _selectedType = widget.device!.typeId;
+          _selectedDriver = widget.device!.driverId;
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _optionsError = 'Could not load drivers and device types.',
+        );
       }
-    });
+    }
   }
 
   @override
@@ -99,84 +115,83 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
       _deviceChannel = widget.device!.channel ?? 0;
       _deviceBaudrate = widget.device!.baudrate;
     }
+    _hostController.text = _deviceHost ?? '';
   }
 
-  /// Update device on the IHC server
-  Future<void> _update() async {
-    setState(() => isLoading = true);
-    _formKey.currentState!.save();
-
-    final updateState = await ihc.updateDevice(
-      device: Device(
-        id: widget.device!.id,
-        host: _deviceHost,
-        channel: _deviceChannel,
-        baudrate: _deviceBaudrate,
-        driverId: _selectedDriver,
-        type: _selectedType,
-        name: _deviceName,
-        state: null,
-      ),
-    );
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: updateState ? Text('Device updated') : Text("Error by saving"),
-      ),
-    );
-
-    setState(() => isLoading = false);
-    return;
+  @override
+  void dispose() {
+    _hostController.dispose();
+    super.dispose();
   }
 
-  /// Register new device on the IHC server
-  Future<void> _register() async {
-    setState(() => isLoading = true);
-    _formKey.currentState!.save();
-
-    final registerSate = await ihc.registerDevice(
-      device: Device(
-        id: '',
-        host: _deviceHost,
-        channel: _deviceChannel,
-        baudrate: _deviceBaudrate,
-        driverId: _selectedDriver,
-        type: _selectedType,
-        name: _deviceName,
-        state: null,
-      ),
+  Future<void> _selectHardwareHost(bool cameras) async {
+    final host = await showHardwareHostPicker(
+      context,
+      api: ihc,
+      cameras: cameras,
     );
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: registerSate ? Text('Device added') : Text("Error by saving"),
-      ),
+    if (!mounted || host == null) return;
+    _hostController.value = TextEditingValue(
+      text: host,
+      selection: TextSelection.collapsed(offset: host.length),
     );
-
-    setState(() => isLoading = false);
   }
 
-  /// Submit form for register or update
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() => isLoading = true);
+    if (isLoading || !_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
-
-    if (isUpdate) {
-      await _update();
-    } else {
-      await _register();
+    setState(() {
+      isLoading = true;
+      _saveError = null;
+    });
+    try {
+      final device = Device(
+        id: widget.device?.id ?? '',
+        host: _deviceHost,
+        channel: _deviceChannel,
+        baudrate: _deviceBaudrate,
+        driverId: _selectedDriver,
+        type: _selectedType,
+        name: _deviceName,
+        state: null,
+      );
+      final saved = isUpdate
+          ? await ihc.updateDevice(device: device)
+          : await ihc.registerDevice(device: device);
+      if (!saved) throw const IHCRequestException('Could not save device');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isUpdate ? 'Device updated' : 'Device added')),
+      );
+      if (!isUpdate && Navigator.of(context).canPop()) {
+        Navigator.pop(context, true);
+      }
+    } on IHCRequestException catch (error) {
+      if (mounted) setState(() => _saveError = error.message);
+    } on TimeoutException {
+      if (mounted) {
+        setState(
+          () => _saveError =
+              'The server did not respond in time. Check the device list before saving again.',
+        );
+      }
+    } on SocketException {
+      if (mounted) {
+        setState(
+          () => _saveError =
+              'Could not connect to the server. Check the connection and try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _saveError =
+              'Could not save device. Check the connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
-
-    if (!mounted) return;
-    setState(() => isLoading = false);
   }
 
   /// Delete device from IHC server
@@ -286,6 +301,28 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
               constraints: const BoxConstraints(maxWidth: 600),
               child: Column(
                 children: [
+                  if (_saveError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        _saveError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  if (_optionsError != null) ...[
+                    Text(
+                      _optionsError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _loadDriversAndTypes,
+                      child: const Text('Retry loading drivers and types'),
+                    ),
+                  ],
                   if (widget.device != null) ...[
                     DeviceControl(device: widget.device!, enabled: !isLoading),
                     SizedBox(height: 20),
@@ -352,15 +389,39 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
                               formFieldContainer(
                                 label: "Host",
                                 formField: TextFormField(
-                                  initialValue: _deviceHost,
+                                  controller: _hostController,
                                   decoration: ioInputDecoration(),
-                                  onSaved: (value) => _deviceHost = value ?? '',
+                                  onSaved: (value) =>
+                                      _deviceHost = value?.trim() ?? '',
                                   validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Device host ist required';
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Device host is required';
                                     }
                                     return null;
                                   },
+                                ),
+                              ),
+
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: isLoading
+                                          ? null
+                                          : () => _selectHardwareHost(false),
+                                      icon: const Icon(Icons.usb),
+                                      label: const Text('Find serial ports'),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: isLoading
+                                          ? null
+                                          : () => _selectHardwareHost(true),
+                                      icon: const Icon(Icons.videocam_outlined),
+                                      label: const Text('Find local cameras'),
+                                    ),
+                                  ],
                                 ),
                               ),
 
@@ -379,7 +440,8 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
                                   }).toList(),
                                   onChanged: (value) =>
                                       setState(() => _selectedDriver = value),
-                                  // validator: (value) => value == null ? 'Select' : null,
+                                  validator: (value) =>
+                                      value == null ? 'Select a driver' : null,
                                   onSaved: (value) => _selectedDriver = value,
                                 ),
                               ),
@@ -391,7 +453,6 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
                                   decoration: ioInputDecoration(),
                                   initialValue: _selectedType,
                                   items: _typeList.map((type) {
-                                    debugPrint(type.toString());
                                     return DropdownMenuItem<int>(
                                       value: type['id'],
                                       child: Text(type['name'] ?? 'Unknown'),
@@ -399,7 +460,9 @@ class _DeviceRegisterState extends State<DeviceRegisterUpdate> {
                                   }).toList(),
                                   onChanged: (value) =>
                                       setState(() => _selectedType = value),
-                                  // validator: (value) => value == null ? 'Select' : null,
+                                  validator: (value) => value == null
+                                      ? 'Select a device type'
+                                      : null,
                                   onSaved: (value) => _selectedType = value,
                                 ),
                               ),

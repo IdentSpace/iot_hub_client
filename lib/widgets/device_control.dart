@@ -7,12 +7,19 @@ import 'package:iot_hub_client/services/token_state.dart';
 import 'package:iot_hub_client/widgets/dialog_nfc.dart';
 import 'package:iot_hub_client/widgets/io_action.dart';
 import 'package:iot_hub_client/widgets/io_card.dart';
+import 'package:iot_hub_client/widgets/camera_view.dart';
 
 class DeviceControl extends StatefulWidget {
   final IOHDevice device;
   final bool enabled;
+  final DeviceActions? actions;
 
-  const DeviceControl({super.key, required this.device, this.enabled = true});
+  const DeviceControl({
+    super.key,
+    required this.device,
+    this.enabled = true,
+    this.actions,
+  });
 
   @override
   State<DeviceControl> createState() => _DeviceControlState();
@@ -24,12 +31,13 @@ class _DeviceControlState extends State<DeviceControl> {
   String? _error;
   bool _busy = false;
   bool _showDetails = false;
+  bool _hasCamera = false;
 
   @override
   void initState() {
     super.initState();
     final token = TokenStore.token;
-    if (token != null) _actions = DeviceActions(token);
+    _actions = widget.actions ?? (token == null ? null : DeviceActions(token));
     _refresh();
   }
 
@@ -51,6 +59,13 @@ class _DeviceControlState extends State<DeviceControl> {
     try {
       final actions = _actions;
       if (actions == null) throw Exception('No account selected');
+      final hasCamera = await actions.hasCamera(widget.device.id);
+      if (!mounted) return;
+      setState(() => _hasCamera = hasCamera);
+      if (hasCamera) {
+        setState(() => _state = null);
+        return;
+      }
       if (command != null) {
         await actions.send(widget.device.id, command, argument);
         sent = true;
@@ -93,6 +108,8 @@ class _DeviceControlState extends State<DeviceControl> {
     final theme = Theme.of(context);
     final status = _error != null
         ? 'Unavailable'
+        : _hasCamera
+        ? 'Ready for snapshot or stream'
         : _state == null
         ? 'Loading status...'
         : kind == DeviceActionKind.power
@@ -107,6 +124,8 @@ class _DeviceControlState extends State<DeviceControl> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_hasCamera && widget.enabled && TokenStore.token != null)
+            CameraView(deviceId: widget.device.id, token: TokenStore.token!),
           Text(
             '${widget.device.typeSlug ?? 'base'} / $status',
             style: theme.textTheme.titleMedium,
@@ -145,7 +164,10 @@ class _DeviceControlState extends State<DeviceControl> {
             const SizedBox(height: 12),
             SelectableText(
               _state == null
-                  ? _error ?? 'No status available'
+                  ? _error ??
+                        (_hasCamera
+                            ? 'Use Snapshot or Start stream to access the camera.'
+                            : 'No status available')
                   : const JsonEncoder.withIndent('  ').convert(_state!.data),
             ),
           ],

@@ -11,6 +11,7 @@ import 'package:iot_hub_client/services/device_actions.dart';
 import 'package:iot_hub_client/widgets/io_action.dart';
 import 'package:iot_hub_client/widgets/dialog_nfc.dart';
 import 'package:iot_hub_client/widgets/io_card.dart';
+import 'package:iot_hub_client/widgets/camera_view.dart';
 
 class DeviceList extends StatefulWidget {
   const DeviceList({super.key});
@@ -146,7 +147,8 @@ class _AdminDevicesState extends State<DeviceList> with RouteAware {
 
 class DeviceListItem extends StatefulWidget {
   final IOHDevice device;
-  const DeviceListItem({super.key, required this.device});
+  final DeviceActions? actions;
+  const DeviceListItem({super.key, required this.device, this.actions});
 
   @override
   State<DeviceListItem> createState() => _DeviceListItemState();
@@ -157,6 +159,7 @@ class _DeviceListItemState extends State<DeviceListItem> {
   DeviceActionState? _state;
   bool _busy = false;
   String? _error;
+  bool _hasCamera = false;
 
   DeviceActionKind get _kind => deviceActionKind(widget.device.typeSlug);
 
@@ -164,7 +167,7 @@ class _DeviceListItemState extends State<DeviceListItem> {
   void initState() {
     super.initState();
     final token = TokenStore.token;
-    if (token != null) _actions = DeviceActions(token);
+    _actions = widget.actions ?? (token == null ? null : DeviceActions(token));
     _refresh();
   }
 
@@ -188,6 +191,13 @@ class _DeviceListItemState extends State<DeviceListItem> {
     });
     try {
       if (_actions == null) throw Exception('No account selected');
+      final hasCamera = await _actions!.hasCamera(widget.device.id);
+      if (!mounted) return;
+      setState(() => _hasCamera = hasCamera);
+      if (hasCamera) {
+        setState(() => _state = null);
+        return;
+      }
       final state = await _actions!.state(widget.device.id);
       if (!mounted) return;
       setState(() {
@@ -254,7 +264,10 @@ class _DeviceListItemState extends State<DeviceListItem> {
         content: SingleChildScrollView(
           child: SelectableText(
             _state == null
-                ? _error ?? 'No status available'
+                ? _error ??
+                      (_hasCamera
+                          ? 'Open the camera to take a snapshot or start a stream.'
+                          : 'No status available')
                 : const JsonEncoder.withIndent('  ').convert(_state!.data),
           ),
         ),
@@ -273,6 +286,8 @@ class _DeviceListItemState extends State<DeviceListItem> {
     final theme = Theme.of(context);
     final status = _error != null
         ? 'Unavailable'
+        : _hasCamera
+        ? 'Ready for snapshot or stream'
         : _state == null
         ? 'Loading status?'
         : _kind == DeviceActionKind.power
@@ -310,18 +325,34 @@ class _DeviceListItemState extends State<DeviceListItem> {
           ),
       ],
     );
-    final actions = IOAction(
-      kind: _kind,
-      isOn: _state?.power,
-      busy: _busy,
-      available: _state != null && !_state!.hasError && _error == null,
-      onReadNfc: TokenStore.token == null
-          ? null
-          : () => showNfcDialog(context, token: TokenStore.token!),
-      onRefresh: _refresh,
-      onStatus: _showStatus,
-      onToggle: () => _send('switch', _state!.power! ? 'off' : 'on'),
-      onMove: _send,
+    final actions = Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (_hasCamera && TokenStore.token != null)
+          IconButton(
+            tooltip: 'Open camera',
+            icon: const Icon(Icons.videocam),
+            onPressed: () => showCameraDialog(
+              context,
+              deviceId: widget.device.id,
+              name: widget.device.name ?? 'Camera',
+              token: TokenStore.token!,
+            ),
+          ),
+        IOAction(
+          kind: _kind,
+          isOn: _state?.power,
+          busy: _busy,
+          available: _state != null && !_state!.hasError && _error == null,
+          onReadNfc: TokenStore.token == null
+              ? null
+              : () => showNfcDialog(context, token: TokenStore.token!),
+          onRefresh: _refresh,
+          onStatus: _showStatus,
+          onToggle: () => _send('switch', _state!.power! ? 'off' : 'on'),
+          onMove: _send,
+        ),
+      ],
     );
     return GestureDetector(
       onTap: () => Navigator.push(

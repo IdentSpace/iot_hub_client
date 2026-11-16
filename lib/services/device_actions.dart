@@ -20,9 +20,9 @@ class DeviceActionState {
   final Map<String, dynamic> data;
 
   DeviceActionState(Map<String, dynamic> json)
-    : state = json['state'] as String?,
+    : state = json['connection'] as String?,
       message = json['message'] as String?,
-      power = json['power_state'] as bool?,
+      power = (json['values'] as Map?)?['power'] as bool?,
       data = json;
 
   bool get hasError =>
@@ -39,24 +39,29 @@ class DeviceActions {
   void close() => _client.close();
 
   Future<Map<String, dynamic>> _request(
-    String path,
-    Map<String, String> query,
-  ) async {
+    String path, {
+    Map<String, dynamic>? command,
+  }) async {
     final base = token.server.replaceFirst(RegExp(r'/+$'), '');
+    final request = http.Request(
+      command == null ? 'GET' : 'POST',
+      Uri.parse('$base/api/v2/devices/$path'),
+    );
+    request.headers.addAll({
+      'Authorization': 'Bearer ${token.token}',
+      'Accept': 'application/json',
+      if (command != null) 'Content-Type': 'application/json',
+    });
+    if (command != null) request.body = jsonEncode(command);
     final response = await _client
-        .get(
-          Uri.parse('$base/api/device/$path').replace(queryParameters: query),
-          headers: {
-            'Authorization': 'Bearer ${token.token}',
-            'Accept': 'application/json',
-          },
-        )
+        .send(request)
+        .then(http.Response.fromStream)
         .timeout(const Duration(seconds: 8));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Request failed (HTTP ${response.statusCode})');
     }
     final body = jsonDecode(response.body);
-    if (body is! Map<String, dynamic> || body['type'] != 'IHCApiResponse') {
+    if (body is! Map<String, dynamic>) {
       throw Exception('Invalid IOHub response');
     }
     final errors = body['errors'];
@@ -66,26 +71,25 @@ class DeviceActions {
         body['message'] == 'error') {
       throw Exception('IOHub rejected the request');
     }
-    if (body['data'] is! Map<String, dynamic>) {
-      throw Exception('Missing IOHub response data');
-    }
-    return body['data'] as Map<String, dynamic>;
+    return body;
   }
 
   Future<DeviceActionState> state(String id) async {
-    final data = await _request('state', {'uuid': id});
-    final device = data['device'];
-    if (device is! Map<String, dynamic>) {
-      throw Exception('Missing device state');
-    }
-    return DeviceActionState(device);
+    return DeviceActionState(
+      await _request('${Uri.encodeComponent(id)}/state'),
+    );
+  }
+
+  Future<bool> hasCamera(String id) async {
+    final data = await _request('${Uri.encodeComponent(id)}/capabilities');
+    return (data['capabilities'] as List?)?.contains('camera') ?? false;
   }
 
   Future<void> send(String id, String command, [String? argument]) async {
-    await _request('event', {
-      'uuid': id,
-      'cmd': command,
-      if (argument != null) 'arg': argument,
-    });
+    final result = await _request(
+      '${Uri.encodeComponent(id)}/commands',
+      command: {'cmd': command, if (argument != null) 'arg': argument},
+    );
+    if (result['success'] != true) throw Exception('Command failed');
   }
 }
